@@ -174,13 +174,11 @@ def delUserData(user):
                 record = int(input("Which record you want to delete? id number... "))
                 for item in range(0,len(jsonDict['accounts'])):
                     print(jsonDict['accounts'][item])
-                print('len ', len(jsonDict['accounts']))
                 if record > -1 and record < len(jsonDict['accounts']):
                     for item in range(0, len(jsonDict['accounts'])):
                         if jsonDict['accounts'][item]['id'] == record:
                             x = record
                     jsonDict['accounts'].pop(x)
-                    print('len ', len(jsonDict['accounts']))
                     if len(jsonDict['accounts']) == 0:
                         with open(userDataFile, 'w') as file:
                             pass
@@ -260,7 +258,6 @@ def setupAcc():
             os.makedirs(dirUser)
 
             password = bytes(getpass(), 'utf-8')
-            print("Directory for ", user, " Created.")
 
             
             # create user key file
@@ -271,14 +268,14 @@ def setupAcc():
             json = encryptPassword(password, user, isRegistered)
             print('json', json)
 
-            #print("LLLLLLLLLLLLLLLLLLL")
-            # append user key to file to second line
+
+            # append user key to file 
             with open('{}/filekey-{}.key'.format(dirUser, user), 'a') as filekey:
                 filekey.write(json)
-            #print("KKKKKKKKKKKKKKKKKKKK")
             # create data file
             with open('{}/data-{}.txt'.format(dirUser, user), 'w') as userDir:    
                 pass
+            print("Directory for ", user, " Created.")
             isRegistered = True
             return isRegistered
         else:
