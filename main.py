@@ -1,6 +1,6 @@
 import base64
 import os
-import secrets, bcrypt
+import secrets
 import json
 from lib2to3.pytree import Base
 from cryptography.fernet import Fernet
@@ -35,7 +35,6 @@ def encryptPassword(password, user, isRegistered):
         with open(userKeyFile, 'r') as file:
             salt = json.loads(file.read())['salt']
 
-
     print("salt: ", salt)
     kdf = PBKDF2HMAC (
         algorithm=hashes.SHA256(),
@@ -43,13 +42,9 @@ def encryptPassword(password, user, isRegistered):
         salt=bytes(salt, 'utf-8'),
         iterations=310000,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(password)) # wygenerowany klucz hasla
-    #salt = bytes(salt, 'utf-8')
-    #salt = salt.decode('utf-8')
-    #string = secrets.decode()
+    key = base64.urlsafe_b64encode(kdf.derive(password)) # generated password key
 
     data = {'salt':salt, 'password':key.decode('utf-8')}
-
     return json.dumps(data)
 
 
@@ -98,21 +93,15 @@ def decryptUserData(user):
             # get user encrypted data to decrypt
             with open(userDataFile, 'rb') as file:
                 file_data = file.read()
-            #print("file_data", file_data)
             
             f = Fernet(key)
 
             # decrypt data
             decrypted_data = f.decrypt(file_data)
-            #print("decrypted_data = ", decrypted_data)
-            
-            # write decrypted data to file
-            #with open(userDataFile, 'wb') as file:
-                #file.write(decrypted_data)
+            return decrypted_data
 
         except BaseException as err:
             print(err)
-    return decrypted_data
 
 def addUserData(user):
     userDataFile = userDir(user,'userDataFile')
@@ -125,125 +114,90 @@ def addUserData(user):
     userPage = input("Enter page: ")
     userLogin = input("Enter login: ")
     userPassword = getpass()
+    try:
+        # if file is empty
+        if size == 0:
+            new_dict = {'accounts':[]}
+            data = {'id':0, 'page':userPage, 'login':userLogin, 'password':userPassword}
+            new_dict['accounts'].append(data)
+            with open(userDataFile, 'w') as file:
+                file.write(json.dumps(new_dict))
+            encryptUserData(user)
+            print("Record added.")
+        else:
+            decryptedData = decryptUserData(user)
+            jsonDict = json.loads(decryptedData)
+            id = 0
+            for item in range(0,len(jsonDict['accounts'])):
+                id = id + 1
+            new_dict = {'id':id,'page':userPage, 'login':userLogin, 'password':userPassword}
+            jsonDict['accounts'].append(new_dict)
+            with open(userDataFile, 'w') as file:
+                file.write(json.dumps(jsonDict))
+            encryptUserData(user)
+            print("Record added.")
+    except BaseException as err:
+        print("Adding new record failed.")
+        print(err)
 
-    # if file is empty
-    if size == 0:
-        new_dict = {'accounts':[]}
-        data = {'userPage':userPage, 'userLogin':userLogin, 'userPassword':userPassword}
-        new_dict['accounts'].append(data)
-        with open(userDataFile, 'w') as file:
-            file.write(json.dumps(new_dict))
-    else:
-        decryptedData = decryptUserData(user)
-        jsonDict = json.loads(decryptedData)
-        new_dict = {'userPage':userPage, 'userLogin':userLogin, 'userPassword':userPassword}
-        
-
-
-
-
-    
-
-
-# def addUserData(user):
-#     userDataFile = userDir(user,'userDataFile')
-
-#     # get size of file
-#     size = os.path.getsize(userDataFile)
-
-#     newFile = False
-#     # if file is empty
-#     if size == 0:
-#         newFile = True
-#     else:
-#         decryptUserData(user)
-
-#     print("You chose to add new record.")
-#     # enter user data
-#     userPage = input("Enter page: ")
-#     userLogin = input("Enter login: ")
-#     userPassword = getpass()
-
-#     # if newFile
-#     if newFile:
-#         template = '   ' + 'Page' + '                ' + 'Login' + '               ' + 'Password' + '\n'
-#         # write default template
-#         with open(userDataFile, 'w') as file:
-#             file.write(template)
-
-#     # get number of lines
-#     with open(userDataFile, 'r') as file:
-#         lines_count = len(file.readlines())
-
-#     empty_char1 = 20-len(userPage)
-#     empty_char1 = empty_char1*' '
-#     empty_char2 = 20-len(userLogin)
-#     empty_char2 = empty_char2*' '
-#     print("number of lines in file: ", lines_count)
-#     id = lines_count 
-#     id = str(id)
-#     userArray = [id + '  ', userPage, empty_char1, userLogin, empty_char2, userPassword, '\n']
-
-#     # append array to file
-#     with open(userDataFile, 'a') as file:
-#         file.writelines(userArray)
-    
-#     # encrypt added record
-#     encryptUserData(user)
-#     userPanel(user)
 
 def readUserData(user):
     # get user directory
-    userDataFile = dirName + '/users/{}/data-{}.txt'.format(user, user)
-        
+    userDataFile = userDir(user,'userDataFile')
     # get size of file
     size = os.stat(userDataFile).st_size
-
     # if file is empty
     if size == 0:
         print('file is empty')
     else:
-        print('file is not empty ' + str(size))
         # decrypt user data
-        decryptUserData(user)
-
-        # read the data
-        with open(userDataFile, 'r') as file:
-            data = file.read()
-        print("Your records: ")
-        print(data)
-        encryptUserData(user)
+        decryptedData = decryptUserData(user)
+        jsonDict = json.loads(decryptedData)
+        print("Your saved accounts: ")
+        for item in range(0,len(jsonDict['accounts'])):
+            print(jsonDict['accounts'][item])
 
 def delUserData(user):
     # get user directory
-    userDataFile = dirName + '/users/{}/data-{}.txt'.format(user, user)
+    userDataFile = userDir(user,'userDataFile')
     # get size of file
     size = os.stat(userDataFile).st_size
-
     # if file is empty
     if size == 0:
         print('file is empty nothing to delete')
     else:
-        readUserData(user)
         try:
-            decryptUserData(user)
-            with open(userDataFile, 'r') as file:
-                lines = file.readlines()
-            lines_lenght = len(lines)
-            print('lines_length', lines_lenght)
+            readUserData(user)
+            decryptedData = decryptUserData(user)
+            jsonDict = json.loads(decryptedData)
             while True:
-                record = int(input("Which record you want to delete? number... "))
-                if record != 0 and record < lines_lenght:
-                    del lines[record]
-                    with open(userDataFile, 'w+') as file:
-                        for line in lines:
-                            file.write(line)
-                    encryptUserData(user)
+                record = int(input("Which record you want to delete? id number... "))
+                for item in range(0,len(jsonDict['accounts'])):
+                    print(jsonDict['accounts'][item])
+                print('len ', len(jsonDict['accounts']))
+                if record > -1 and record < len(jsonDict['accounts']):
+                    for item in range(0, len(jsonDict['accounts'])):
+                        if jsonDict['accounts'][item]['id'] == record:
+                            x = record
+                    jsonDict['accounts'].pop(x)
+                    print('len ', len(jsonDict['accounts']))
+                    if len(jsonDict['accounts']) == 0:
+                        with open(userDataFile, 'w') as file:
+                            pass
+                    else:
+                        id = 0
+                        for item in range(0,len(jsonDict['accounts'])):
+                            jsonDict['accounts'][item]['id'] = id
+                            id = id + 1
+                        with open(userDataFile, 'w') as file:
+                            file.write(json.dumps(jsonDict))
+                        encryptUserData(user)
                     break
                 else:
                     print("Enter valid number")
-        except ValueError:
-            print('Enter valid number')
+        except BaseException as err:
+            print(err)
+
 # control user data
 def userPanel(user):
     while True:
@@ -257,7 +211,6 @@ def userPanel(user):
                 delUserData(user)
         else:
             print("Wrong option.")
-
 
 def loginAcc():
     while True:
@@ -273,10 +226,6 @@ def loginAcc():
         if path.is_file() == True:
             # password input
             password = bytes(getpass(), 'utf-8')
-
-            # get user salt from txt file ...
-            
-
             key = encryptPassword(password, user, isRegistered = True)
             
             # json loads
@@ -322,11 +271,11 @@ def setupAcc():
             json = encryptPassword(password, user, isRegistered)
             print('json', json)
 
-            print("LLLLLLLLLLLLLLLLLLL")
+            #print("LLLLLLLLLLLLLLLLLLL")
             # append user key to file to second line
             with open('{}/filekey-{}.key'.format(dirUser, user), 'a') as filekey:
                 filekey.write(json)
-            print("KKKKKKKKKKKKKKKKKKKK")
+            #print("KKKKKKKKKKKKKKKKKKKK")
             # create data file
             with open('{}/data-{}.txt'.format(dirUser, user), 'w') as userDir:    
                 pass
