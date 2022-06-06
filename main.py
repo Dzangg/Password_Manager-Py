@@ -10,8 +10,8 @@ from pathlib import Path
 from getpass import getpass
 
 
-# get current directory
 dirName = os.getcwd()
+
 
 def userDir(user, file):
     if file == 'userDataFile':
@@ -28,18 +28,17 @@ def encryptPassword(password, user, isRegistered):
     # else: acc exist -> does have salt already
     #       get salt from file
     userKeyFile = userDir(user, 'userKeyFile')
+    password = password.encode('utf-8')
     if isRegistered == False:
         salt = secrets.token_urlsafe(16)
     if isRegistered == True:
-        # get salt from json
         with open(userKeyFile, 'r') as file:
             salt = json.loads(file.read())['salt']
 
-    print("salt: ", salt)
     kdf = PBKDF2HMAC (
         algorithm=hashes.SHA256(),
         length=32,
-        salt=bytes(salt, 'utf-8'),
+        salt=salt.encode('utf-8'),
         iterations=310000,
     )
     key = base64.urlsafe_b64encode(kdf.derive(password)) # generated password key
@@ -47,22 +46,25 @@ def encryptPassword(password, user, isRegistered):
     data = {'salt':salt, 'password':key.decode('utf-8')}
     return json.dumps(data)
 
-
 def encryptUserData(user):
     userDataFile = userDir(user,'userDataFile')
     userKeyFile = userDir(user, 'userKeyFile')
 
     try:
-        # get key from json file
-        with open(userKeyFile, 'r') as file:
-            key = json.loads(file.read())['password']
-
-        # get user data to encrypt
         with open(userDataFile, 'r') as file:
             file_data = file.read()
         file_data = bytes(file_data, 'utf-8')
 
-        # encrypt data
+        with open(userKeyFile, 'r') as file:
+            salt = json.loads(file.read())['password']
+
+        kdf = PBKDF2HMAC (
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt.encode('utf-8'),
+        iterations=310000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(password.encode('utf-8'))) # generated password key
         f = Fernet(key)
         encrypted_data = f.encrypt(file_data)
 
@@ -78,25 +80,27 @@ def decryptUserData(user):
     userDataFile = userDir(user,'userDataFile')
     userKeyFile = userDir(user, 'userKeyFile')
 
-    # get size of file
     size = os.path.getsize(userDataFile)
 
-    # if file is empty
     if size == 0:
         return 'empty'
     else:
         try: 
-            # get user key from file json
-            with open(userKeyFile, 'r') as file:
-                key = json.loads(file.read())['password']
-
-            # get user encrypted data to decrypt
             with open(userDataFile, 'rb') as file:
                 file_data = file.read()
-            
+
+            with open(userKeyFile, 'r') as file:
+                salt = json.loads(file.read())['password']
+
+            kdf = PBKDF2HMAC (
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt.encode('utf-8'),
+            iterations=310000,
+            )
+            key = base64.urlsafe_b64encode(kdf.derive(password.encode('utf-8'))) # generated password key
             f = Fernet(key)
 
-            # decrypt data
             decrypted_data = f.decrypt(file_data)
             return decrypted_data
 
@@ -106,16 +110,14 @@ def decryptUserData(user):
 def addUserData(user):
     userDataFile = userDir(user,'userDataFile')
 
-    # get size of file
     size = os.path.getsize(userDataFile)
 
     userDataFile = userDir(user,'userDataFile')
-    print("You chose to add new record.")
+    print("Add new record: ")
     userPage = input("Enter page: ")
     userLogin = input("Enter login: ")
     userPassword = getpass()
     try:
-        # if file is empty
         if size == 0:
             new_dict = {'accounts':[]}
             data = {'id':0, 'page':userPage, 'login':userLogin, 'password':userPassword}
@@ -142,15 +144,11 @@ def addUserData(user):
 
 
 def readUserData(user):
-    # get user directory
     userDataFile = userDir(user,'userDataFile')
-    # get size of file
     size = os.stat(userDataFile).st_size
-    # if file is empty
     if size == 0:
-        print('file is empty')
+        print('No records found')
     else:
-        # decrypt user data
         decryptedData = decryptUserData(user)
         jsonDict = json.loads(decryptedData)
         print("Your saved accounts: ")
@@ -158,11 +156,8 @@ def readUserData(user):
             print(jsonDict['accounts'][item])
 
 def delUserData(user):
-    # get user directory
     userDataFile = userDir(user,'userDataFile')
-    # get size of file
     size = os.stat(userDataFile).st_size
-    # if file is empty
     if size == 0:
         print('file is empty nothing to delete')
     else:
@@ -190,13 +185,13 @@ def delUserData(user):
                         with open(userDataFile, 'w') as file:
                             file.write(json.dumps(jsonDict))
                         encryptUserData(user)
+                        print("Record deleted.")
                     break
                 else:
                     print("Enter valid number")
         except BaseException as err:
             print(err)
 
-# control user data
 def userPanel(user):
     while True:
         choice = input("Choose your action: (1) List all (2) Add record (3) Delete record ")
@@ -212,27 +207,22 @@ def userPanel(user):
 
 def loginAcc():
     while True:
-        # user input
         user = input('Login as user: ') 
 
-        # check user file key directory
         userKeyFile = userDir(user, 'userKeyFile')
         path_to_file = userKeyFile
         path = Path(path_to_file)
 
         # if user exist check user authentication
         if path.is_file() == True:
-            # password input
-            password = bytes(getpass(), 'utf-8')
+            global password
+            password = getpass()
             key = encryptPassword(password, user, isRegistered = True)
             
-            # json loads
             key = json.loads(key)['password']
-            print("key from json ", key)
 
             with open(userKeyFile, 'r') as file:
                 filekey = json.loads(file.read())['password']
-                print('key from json FILE ', filekey)
 
             if key == filekey:
                 print("Login successful. Hello {}".format(user))
@@ -241,33 +231,26 @@ def loginAcc():
                 print("Wrong password.")
         else:
             print("No user found...")
+            return
 
 
 # create user 
 def setupAcc():
     while True:
         isRegistered = False
-        # get user login & password
         user = input("Enter your NEW login: ")
 
-        # get user directory
         dirUser = dirName + '/users/{}'.format(user)
 
         # if directory doesn't exists create user directory
         if not os.path.exists(dirUser):
             os.makedirs(dirUser)
-
-            password = bytes(getpass(), 'utf-8')
-
+            password = getpass()
             
-            # create user key file
             with open('{}/filekey-{}.key'.format(dirUser, user), 'w') as filekey:
                 pass
 
-            # get password key
             json = encryptPassword(password, user, isRegistered)
-            print('json', json)
-
 
             # append user key to file 
             with open('{}/filekey-{}.key'.format(dirUser, user), 'a') as filekey:
@@ -275,7 +258,7 @@ def setupAcc():
             # create data file
             with open('{}/data-{}.txt'.format(dirUser, user), 'w') as userDir:    
                 pass
-            print("Directory for ", user, " Created.")
+            print("Directory for ", user, " created. ")
             isRegistered = True
             return isRegistered
         else:
@@ -291,7 +274,7 @@ def main():
         else:
             if choice == '1':
                 try:
-                    isRegistered = setupAcc() # return zaszyfrowany klucz
+                    isRegistered = setupAcc() 
                     if isRegistered:
                         print("Succesfully registered")
                     else:
